@@ -7,24 +7,24 @@ logging.basicConfig(
     format="%(asctime)s - %(levelname)s - %(message)s"
 )
 
-def export_to_excel():
+def export_to_excel(limit=None):
     logging.info("📊 Reading SQLite...")
     conn = sqlite3.connect("scraper.db")
 
-    query = """
-        SELECT 
-            business_name AS 'Company Name',
-            phone AS 'Phone Number',
-            website AS 'Website',
-            address AS 'Location',
-            rating AS 'Rating',
-            reviews_count AS 'Reviews',
-            years_in_business AS 'Years in Business',
-            scraped_at AS 'Date Added'
-        FROM leads
-    """
+    query = "SELECT * FROM leads"
+    if limit:
+        query += f" LIMIT {limit}"
     
     df = pd.read_sql_query(query, conn)
+    df.rename(columns={
+        "business_name": "Business Name",
+        "phone": "Phone Number",
+        "website": "Website",
+        "address": "Address",
+        "rating": "Rating",
+        "reviews_count": "Reviews Count",
+        "years_in_business": "Years in Business"
+    }, inplace=True)
     
     if df.empty:
         logging.exception("⚠️ DB is empty! Nothing to export.")

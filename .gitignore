@@ -220,3 +220,8 @@ __marimo__/
 # DBs
 *.db
 *.sqlite3
+
+# Excel files
+*.csv
+*.xlsx
+*.xls
