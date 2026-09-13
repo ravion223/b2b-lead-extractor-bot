@@ -3,12 +3,15 @@ import os
 from aiogram import Bot, Dispatcher, F
 from aiogram.types import Message, CallbackQuery, InlineKeyboardMarkup, InlineKeyboardButton, FSInputFile
 from aiogram.filters import Command, CommandStart
+from aiogram.fsm.context import FSMContext
+from aiogram.fsm.state import State, StatesGroup
+
 import logging
 import aiosqlite
 from dotenv import load_dotenv
-from pathlib import Path
 
 from export import export_to_excel
+from scraper import scrape_yellowpages
 
 load_dotenv()
 
@@ -24,11 +27,13 @@ logging.basicConfig(
     format="%(asctime)s - %(levelname)s - %(message)s"
 )
 
+class ScraperState(StatesGroup):
+    waiting_for_url = State()
 
 def get_main_keyboard():
     return InlineKeyboardMarkup(inline_keyboard=[
-        [InlineKeyboardButton(text="📊 Download Lead Report", callback_data="generate_report")],
-        [InlineKeyboardButton(text="🏆 Top 3 Rated Roofers", callback_data="stat_top_3")],
+        [InlineKeyboardButton(text="📊 Generate Lead Report", callback_data="ask_for_url")],
+        [InlineKeyboardButton(text="🏆 Top 3 Rated Companies", callback_data="stat_top_3")],
         [InlineKeyboardButton(text="🌐 Website Statistics", callback_data="stat_websites")]
     ])
 
@@ -38,11 +43,12 @@ def get_premium_keyboard():
     ])
 
 @dp.message(CommandStart())
-async def cmd_start(message: Message):
+async def cmd_start(message: Message, state: FSMContext):
+    await state.clear()
     welcome_text = (
-        "👋 Hi! I'm automated B2B-parser.\n\n"
-        "I can gather up-to-date Roofing Contractors contacts in Austin, TX,"
-        "filter out duplicates and send you a clean Excel file for the CRM."
+        "👋 Hello! I am the B2B Lead Extractor (Demo Environment).\n\n"
+        "I can extract, clean, and structure B2B contacts directly into an Excel pipeline. "
+        "Use the options below to interact with the database."
     )
     await message.answer(welcome_text, reply_markup=get_main_keyboard())
 
@@ -63,7 +69,7 @@ async def handle_top_3(callback: CallbackQuery):
         cursor = await db.execute("SELECT business_name, rating FROM leads WHERE rating IS NOT NULL ORDER BY rating DESC LIMIT 3")
         rows = await cursor.fetchall()
 
-        text = "🏆 **Top 3 Rated Roofing Contractors:**\n\n"
+        text = "🏆 **Top 3 Rated Companies:**\n\n"
         for idx, (name, rating) in enumerate(rows, 1):
             text += f"{idx}. {name} - ⭐ {rating}\n"
 
@@ -89,50 +95,84 @@ async def handle_websites(callback: CallbackQuery):
         await callback.message.answer(text, parse_mode="Markdown")
     await callback.answer()
 
-@dp.callback_query(F.data == "generate_report")
-async def handle_generate_report(callback: CallbackQuery):
-    user_id = callback.from_user.id
+# FSM: STEP 1
+@dp.callback_query(F.data == "ask_for_url")
+async def request_url(callback: CallbackQuery, state: FSMContext):
+    await callback.message.answer(
+        "🔗 **Please send me the YellowPages URL you want to scrape.**\n\n"
+        "*Example:* `https://www.yellowpages.com/dallas-tx/plumbers`",
+        parse_mode="Markdown"
+    )
+
+    await state.set_state(ScraperState.waiting_for_url)
+    await callback.answer()
+
+# FSM: STEP 2
+@dp.message(ScraperState.waiting_for_url)
+async def process_target_url(message: Message, state: FSMContext):
+    target_url = message.text.strip()
+
+    # Domain limit validation
+    if "yellowpages.com" not in target_url:
+        await message.answer("⚠️ Invalid URL. This parser is optimized strictly for `yellowpages.com` domains. Please try again.")
+        return
+
+    user_id = message.from_user.id
     is_premium = user_id in premium_users
 
-    loading_msg = await callback.message.answer("⏳ Initializing connection to SQLite database...")
-    await callback.message.delete()
+    loading_msg = await message.answer("⏳ Wiping old database and launching Playwright browser...")
 
-    statuses = [
-        "🔍 Reading data (Roofing Contractors, Austin, TX)...",
-        "⚙️ Executing Data Deduplication...",
-        "📊 Pandas DataFrame generation and formatting...",
-        "✅ Export in .xlsx (openpyxl engine) finished!"
-    ]
+    # Launching scraper
+    try:
+        stats = await scrape_yellowpages(target_url)
+    except Exception as e:
+        await loading_msg.edit_text(f"⚠️ Scraping failed: {e}")
+        await state.clear()
+        return
 
-    for status in statuses[1:]:
-        await asyncio.sleep(1.2)
-        await loading_msg.edit_text(status)
+    if stats["total_found"] == 0:
+        await loading_msg.edit_text("⚠️ No results found on this page. Make sure the URL points to a valid search directory.")
+        await state.clear()
+        return
 
-    await asyncio.sleep(0.8)
+    await loading_msg.edit_text(f"✅ Extracted {stats['total_found']} raw cards. Executing Data Deduplication...")
+    await asyncio.sleep(1.0)
 
+    # Export Gatekeeping
     if is_premium:
         export_to_excel(limit=None)
-        caption_text = "🎯 Done! Here is your report with contacts."
+        caption_text = (
+            f"🎯 **Data Pipeline Completed!**\n\n"
+            f"• Cards parsed: {stats['total_found']}\n"
+            f"• Unique leads added: {stats['new_added']}\n\n"
+            f"Here is your full premium dataset."
+        )
     else:
         export_to_excel(limit=5)
-        caption_text = "⚠️ This is a free Demo Report (limited to 5 rows).\n\nUpgrade to Premium to export the entire database."
+        caption_text = (
+            f"🎯 **Data Pipeline Completed!**\n\n"
+            f"• Cards parsed: {stats['total_found']}\n"
+            f"• Unique leads added: {stats['new_added']}\n\n"
+            f"⚠️ *This is a free Demo Report (limited to 5 rows).* Upgrade to Premium to export the entire database."
+        )
 
     file_path = "leads_report.xlsx"
 
     if os.path.exists(file_path):
         document = FSInputFile(file_path)
         markup = get_main_keyboard() if is_premium else get_premium_keyboard()
-        await callback.message.answer_document(
-            document, 
+
+        await message.answer_document(
+            document,
             caption=caption_text,
-            reply_markup=markup
+            reply_markup=markup,
+            parse_mode="Markdown"
         )
-        
         await loading_msg.delete()
     else:
-        await callback.message.answer("⚠️ An error occured when generating file.")
+        await message.answer("⚠️ An error occurred while generating the file.")
 
-    await callback.answer()
+    await state.clear()
 
 @dp.callback_query(F.data == "upgrade_premium")
 async def handle_upgrade_prompt(callback: CallbackQuery):
@@ -145,7 +185,11 @@ async def handle_upgrade_prompt(callback: CallbackQuery):
     await callback.answer()
 
 @dp.message(F.text)
-async def handle_any_text(message: Message):
+async def handle_any_text(message: Message, state: FSMContext):
+    current_state = await state.get_state()
+    if current_state == ScraperState.waiting_for_url.state:
+        return
+    
     if message.text == "/premium":
         return
     
