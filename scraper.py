@@ -11,36 +11,40 @@ logging.basicConfig(
     format="%(asctime)s - %(levelname)s - %(message)s"
 )
 
-async def scrape_yellowpages():
+async def scrape_yellowpages(url: str) -> dict:
     async with aiosqlite.connect("scraper.db") as db:
+        # Clearing db before new parsing
+        await db.execute("DELETE FROM leads")
+        await db.commit()
+
         async with async_playwright() as p:
             browser = await p.chromium.launch(headless=False)
-
             context = await browser.new_context(
                 user_agent="Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/122.0.0.0 Safari/537.36",
                 viewport={"width": 1366, "height": 768}
             )
 
-            page = await browser.new_page()
+            page = await context.new_page()
             
-            logging.info("🚀 Entering YellowPages...")
+            logging.info("🚀 Entering URL: {url}")
             total_new_leads = 0
 
-            url = f"https://www.yellowpages.com/austin-tx/roofing-contractors"
             await page.goto(url)
 
             try:
                 await page.wait_for_selector(".result", timeout=10000)
             except Exception:
                 logging.error("⚠️ Cards not found. Stopping scrapping.")
-                return
+                await browser.close()
+                return {"total_found": 0, "new_added": 0}
 
             html = await page.content()
             soup = BeautifulSoup(html, "html.parser")
-
             cards = soup.find_all("div", class_="result")
 
-            logging.info(f"✅ Found {len(cards)} cards\n")
+            if not cards:
+                await browser.close()
+                return {"total_found": 0, "new_added": 0}
 
             for card in cards:
                 # 1. Name and phone number
@@ -113,9 +117,9 @@ async def scrape_yellowpages():
                     total_new_leads += 1
 
             await db.commit()
-            logging.info(f"\n🎯 Total new leads added: {total_new_leads}")
-
             await browser.close()
-            
+
+            return {"total_found": len(cards), "new_added": total_new_leads}
+
 if __name__ == "__main__":
-    asyncio.run(scrape_yellowpages())
+    pass
