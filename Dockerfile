@@ -1,4 +1,4 @@
-# Use Microsoft's official Playwright image (pre-configured with OS dependencies, Chromium, and Xvfb)
+# Microsoft's official Playwright image (pre-configured with Chromium, Firefox, WebKit, and Xvfb)
 FROM mcr.microsoft.com/playwright/python:v1.42.0-jammy
 
 # Prevent Python from writing pyc files and enable unbuffered logging

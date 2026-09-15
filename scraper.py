@@ -1,40 +1,47 @@
 import asyncio
 import re
-import aiosqlite
 import logging
 import random
+
+import aiosqlite
 from playwright.async_api import async_playwright
+from playwright_stealth import stealth_async
 from bs4 import BeautifulSoup
 
-logging.basicConfig(
-    level=logging.INFO,
-    format="%(asctime)s - %(levelname)s - %(message)s"
-)
+from config import DB_PATH
+
 
 async def scrape_yellowpages(url: str) -> dict:
-    async with aiosqlite.connect("scraper.db") as db:
+    async with aiosqlite.connect(DB_PATH) as db:
         # Clearing db before new parsing
         await db.execute("DELETE FROM leads")
         await db.commit()
 
         async with async_playwright() as p:
-            browser = await p.chromium.launch(headless=False)
+            browser = await p.firefox.launch(headless=False)
             context = await browser.new_context(
-                user_agent="Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/122.0.0.0 Safari/537.36",
-                viewport={"width": 1366, "height": 768}
+                user_agent="Mozilla/5.0 (Windows NT 10.0; Win64; x64; rv:124.0) Gecko/20100101 Firefox/124.0",
+                viewport={"width": 1366, "height": 768},
+                locale="en-US",
+                timezone_id="America/Chicago",
             )
 
             page = await context.new_page()
+            await stealth_async(page)
             
-            logging.info("🚀 Entering URL: {url}")
+            logging.info(f"🚀 Entering URL: {url}")
             total_new_leads = 0
 
-            await page.goto(url)
+            await page.goto(url, wait_until="domcontentloaded")
+            # Random human-like delay (3-6 seconds)
+            await asyncio.sleep(random.uniform(3, 6))
 
             try:
-                await page.wait_for_selector(".result", timeout=10000)
+                await page.wait_for_selector(".result", timeout=15000)
             except Exception:
-                logging.error("⚠️ Cards not found. Stopping scrapping.")
+                # Save a screenshot so we can see WHY it failed (CAPTCHA, block, changed layout)
+                await page.screenshot(path="debug_screenshot.png", full_page=True)
+                logging.error("⚠️ Cards not found. Screenshot saved to debug_screenshot.png")
                 await browser.close()
                 return {"total_found": 0, "new_added": 0}
 
