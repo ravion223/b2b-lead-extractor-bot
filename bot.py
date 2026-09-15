@@ -12,7 +12,7 @@ import aiosqlite
 from config import BOT_TOKEN, DB_PATH, EXPORT_FILE, FREE_TIER_LIMIT
 from database import init_db
 from export import export_to_excel
-from scraper import scrape_yellowpages
+from scraper import scrape_directory
 
 bot = Bot(token=BOT_TOKEN)
 dp = Dispatcher()
@@ -94,7 +94,7 @@ async def handle_websites(callback: CallbackQuery):
 @dp.callback_query(F.data == "ask_for_url")
 async def request_url(callback: CallbackQuery, state: FSMContext):
     await callback.message.answer(
-        "🔗 **Please send me the YellowPages URL you want to scrape.**\n\n"
+        "🔗 **Please send me the target directory URL you want to scrape.**\n\n"
         "*Example:* `https://www.yellowpages.com/dallas-tx/plumbers`",
         parse_mode="Markdown"
     )
@@ -109,17 +109,17 @@ async def process_target_url(message: Message, state: FSMContext):
 
     # Domain limit validation
     if "yellowpages.com" not in target_url:
-        await message.answer("⚠️ Invalid URL. This parser is optimized strictly for `yellowpages.com` domains. Please try again.")
+        await message.answer("⚠️ Invalid URL. This parser MVP is currently optimized strictly for `yellowpages.com` domains. Please try again with a supported link.")
         return
 
     user_id = message.from_user.id
-    is_premium = user_id in premium_users
+    is_premium = True # TEMPORARY!!!
 
     loading_msg = await message.answer("⏳ Wiping old database and launching Playwright browser...")
 
     # Launching scraper
     try:
-        stats = await scrape_yellowpages(target_url)
+        stats = await scrape_directory(target_url)
     except Exception as e:
         await loading_msg.edit_text(f"⚠️ Scraping failed: {e}")
         await state.clear()

@@ -8,22 +8,31 @@ from playwright.async_api import async_playwright
 from playwright_stealth import stealth_async
 from bs4 import BeautifulSoup
 
-from config import DB_PATH
+from config import DB_PATH, SCRAPER_API_KEY
 
 
-async def scrape_yellowpages(url: str) -> dict:
+async def scrape_directory(url: str) -> dict:
     async with aiosqlite.connect(DB_PATH) as db:
         # Clearing db before new parsing
         await db.execute("DELETE FROM leads")
         await db.commit()
 
         async with async_playwright() as p:
-            browser = await p.firefox.launch(headless=False)
+            browser = await p.chromium.launch(
+                headless=False,
+                args=['--ignore-certificate-errors'],
+                proxy={
+                    "server": "http://proxy-server.scraperapi.com:8001",
+                    "username": "scraperapi.country=us",
+                    "password": SCRAPER_API_KEY
+                }
+            )
             context = await browser.new_context(
                 user_agent="Mozilla/5.0 (Windows NT 10.0; Win64; x64; rv:124.0) Gecko/20100101 Firefox/124.0",
                 viewport={"width": 1366, "height": 768},
                 locale="en-US",
                 timezone_id="America/Chicago",
+                ignore_https_errors=True
             )
 
             page = await context.new_page()
@@ -32,7 +41,7 @@ async def scrape_yellowpages(url: str) -> dict:
             logging.info(f"🚀 Entering URL: {url}")
             total_new_leads = 0
 
-            await page.goto(url, wait_until="domcontentloaded")
+            await page.goto(url, wait_until="domcontentloaded", timeout=90000)
             # Random human-like delay (3-6 seconds)
             await asyncio.sleep(random.uniform(3, 6))
 

@@ -7,6 +7,7 @@ load_dotenv()
 
 # --- Telegram ---
 BOT_TOKEN = os.getenv("BOT_TOKEN")
+SCRAPER_API_KEY = os.getenv("SCRAPER_API_KEY")
 
 # --- Paths ---
 DB_PATH = os.getenv("DB_PATH", "scraper.db")

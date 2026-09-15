@@ -6,7 +6,7 @@ os.environ["DB_PATH"] = ":memory:"
 from bs4 import BeautifulSoup
 
 
-# --- HTML fixture: simulates a real YellowPages result card ---
+# --- HTML fixture: simulates a result card ---
 SAMPLE_CARD_HTML = """
 <div class="result">
     <a class="business-name" href="/profile/abc">Joe's Plumbing</a>
