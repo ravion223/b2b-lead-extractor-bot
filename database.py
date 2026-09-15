@@ -1,13 +1,11 @@
 import sqlite3
 import logging
 
-logging.basicConfig(
-    level=logging.INFO,
-    format="%(asctime)s - %(levelname)s - %(message)s"
-)
+from config import DB_PATH
+
 
 def init_db():
-    conn = sqlite3.connect("scraper.db")
+    conn = sqlite3.connect(DB_PATH)
     cursor = conn.cursor()
 
     cursor.execute("""

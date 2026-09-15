@@ -1,31 +1,24 @@
 import asyncio
+import logging
 import os
+
 from aiogram import Bot, Dispatcher, F
 from aiogram.types import Message, CallbackQuery, InlineKeyboardMarkup, InlineKeyboardButton, FSInputFile
 from aiogram.filters import Command, CommandStart
 from aiogram.fsm.context import FSMContext
 from aiogram.fsm.state import State, StatesGroup
-
-import logging
 import aiosqlite
-from dotenv import load_dotenv
 
+from config import BOT_TOKEN, DB_PATH, EXPORT_FILE, FREE_TIER_LIMIT
+from database import init_db
 from export import export_to_excel
 from scraper import scrape_yellowpages
 
-load_dotenv()
-
-BOT_TOKEN = os.getenv('BOT_TOKEN')
 bot = Bot(token=BOT_TOKEN)
 dp = Dispatcher()
 
-# Fake database (Freemium Gatekeeping)
-premium_users = set()
-
-logging.basicConfig(
-    level=logging.INFO,
-    format="%(asctime)s - %(levelname)s - %(message)s"
-)
+# In-memory set for freemium gatekeeping (resets on restart)
+premium_users: set[int] = set()
 
 class ScraperState(StatesGroup):
     waiting_for_url = State()
@@ -65,7 +58,7 @@ async def cmd_secret_premium(message: Message):
 # --- INLINE ANALYTICS HANDLERS ---
 @dp.callback_query(F.data == "stat_top_3")
 async def handle_top_3(callback: CallbackQuery):
-    async with aiosqlite.connect("scraper.db") as db:
+    async with aiosqlite.connect(DB_PATH) as db:
         cursor = await db.execute("SELECT business_name, rating FROM leads WHERE rating IS NOT NULL ORDER BY rating DESC LIMIT 3")
         rows = await cursor.fetchall()
 
@@ -78,18 +71,20 @@ async def handle_top_3(callback: CallbackQuery):
 
 @dp.callback_query(F.data == "stat_websites")
 async def handle_websites(callback: CallbackQuery):
-    async with aiosqlite.connect("scraper.db") as db:
+    async with aiosqlite.connect(DB_PATH) as db:
         cursor = await db.execute("SELECT COUNT(*) FROM leads WHERE website IS NOT NULL")
         with_web = (await cursor.fetchone())[0]
 
         cursor = await db.execute("SELECT COUNT(*) FROM leads")
         total = (await cursor.fetchone())[0]
 
+        percentage = round((with_web / total) * 100, 1) if total > 0 else 0.0
+
         text = (
             "🌐 **Digital Presence Stats:**\n\n"
             f"• Total Leads: {total}\n"
             f"• Have a Website: {with_web}\n"
-            f"• Conversion potential: {round((with_web/total)*100, 1)}%"
+            f"• Conversion potential: {percentage}%"
         )
         
         await callback.message.answer(text, parse_mode="Markdown")
@@ -148,15 +143,15 @@ async def process_target_url(message: Message, state: FSMContext):
             f"Here is your full premium dataset."
         )
     else:
-        export_to_excel(limit=5)
+        export_to_excel(limit=FREE_TIER_LIMIT)
         caption_text = (
             f"🎯 **Data Pipeline Completed!**\n\n"
             f"• Cards parsed: {stats['total_found']}\n"
             f"• Unique leads added: {stats['new_added']}\n\n"
-            f"⚠️ *This is a free Demo Report (limited to 5 rows).* Upgrade to Premium to export the entire database."
+            f"⚠️ *This is a free Demo Report (limited to {FREE_TIER_LIMIT} rows).* Upgrade to Premium to export the entire database."
         )
 
-    file_path = "leads_report.xlsx"
+    file_path = EXPORT_FILE
 
     if os.path.exists(file_path):
         document = FSInputFile(file_path)
@@ -200,6 +195,7 @@ async def handle_any_text(message: Message, state: FSMContext):
     )
 
 async def main():
+    init_db()
     logging.info("🤖 Bot successfully launched and ready to work!")
     await dp.start_polling(bot)
 
