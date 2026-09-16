@@ -8,7 +8,7 @@
 > A production-ready asynchronous Telegram bot and Data Engineering pipeline that dynamically extracts, structures, and exports B2B leads from major US business directories.
 
 <div align="center">
-  <img width="100%" alt="Image" src="https://github.com/user-attachments/assets/2e0f7c86-3cad-4cb4-944b-290a1883928f" />
+  <img width="100%" alt="Image" src="https://github.com/user-attachments/assets/bb4cdf1c-d2eb-4d19-b9dd-7462f83c2da2" />
 </div>
 
 ## Overview
