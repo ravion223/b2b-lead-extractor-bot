@@ -113,8 +113,7 @@ async def process_target_url(message: Message, state: FSMContext):
         return
 
     user_id = message.from_user.id
-    is_premium = True # TEMPORARY!!!
-
+    is_premium = user_id in premium_users
     loading_msg = await message.answer("⏳ Wiping old database and launching Playwright browser...")
 
     # Launching scraper

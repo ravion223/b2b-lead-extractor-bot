@@ -41,12 +41,9 @@ This project solves the bottleneck of manual B2B lead generation. It combines a 
    Create a .env file in the root directory (ensure it uses LF line endings, not CRLF) and add your Telegram Bot Token:
    ```bash
    BOT_TOKEN=your_telegram_bot_token_here
+   SCRAPER_API_KEY=your_scraper_api_key_here
    ```
-3. **Build the Docker Image:**
+3. **Build and Run the Pipeline:**
    ```bash
-   docker build -t usa-lead-extractor .
-   ```
-4. **Run the Container:**
-   ```bash
-   docker run -it --rm --name brio-bot --env-file .env usa-lead-extractor
+   docker compose up --build
    ```
