@@ -13,22 +13,24 @@
 
 ## Overview
 
-This project solves the bottleneck of manual B2B lead generation. It combines a robust headless-resistant web scraper built with Playwright with a seamless Telegram Bot UI (Aiogram FSM). The architecture follows a strict Separation of Concerns: the scraping engine blindly extracts raw data into SQLite, while the bot handles user states, freemium business logic, and Excel report generation.
+This project solves the bottleneck of manual B2B lead generation. It combines a robust web scraper built with Playwright and ScraperAPI with a seamless Telegram Bot UI (Aiogram FSM). The scraper supports **multi-page pagination** (user-configurable, 1–10 pages) with automatic retry logic for proxy resilience. The architecture follows a strict Separation of Concerns: the scraping engine extracts raw data into SQLite, while the bot handles user states, freemium business logic, and Excel report generation.
 
 ## Core Features & Architecture
 
-- **Headless-Resistant Scraping:** Utilizes a containerized `Xvfb` virtual display approach to run Playwright in `headless=False` mode, bypassing basic anti-bot systems (like Cloudflare) that block standard headless requests.
+- **ScraperAPI Proxy Integration:** Routes all requests through ScraperAPI's rotating proxy infrastructure, bypassing Cloudflare and other anti-bot systems. Runs in headless mode for optimal performance.
+- **Multi-Page Pagination:** Users specify how many pages to scrape (1–10) via the Telegram bot. Each page is scraped sequentially with human-like delays between requests.
+- **Automatic Retry Mechanism:** Each page navigation retries up to 3 times with exponential backoff (5s, 10s), handling transient proxy failures gracefully. Real-time progress updates are sent to the user in Telegram.
 - **Separation of Concerns (ETL Pattern):** The scraper strictly handles data extraction and SQLite population, while the bot layer independently manages freemium limitations (e.g., exporting only 5 rows for free users) without altering the raw database.
-- **Dynamic State Management:** Built with Aiogram's Finite State Machine (FSM) to handle concurrent user sessions, process dynamic URL inputs, and gracefully manage edge cases during long-polling scraping tasks.
+- **Dynamic State Management:** Built with Aiogram's Finite State Machine (FSM) to handle concurrent user sessions, process URL and page count inputs across multiple steps, and gracefully manage edge cases during long-running scraping tasks.
 - **Containerized Infrastructure:** Fully packaged using the official Microsoft Playwright Docker image, guaranteeing flawless OS-level dependency resolution and out-of-the-box execution on any cloud provider.
 
 ## 🛠 Tech Stack Details
 
 - **Frontend/UI:** Telegram Bot API (Aiogram 3.x)
-- **Web Scraping:** Playwright, BeautifulSoup4
+- **Web Scraping:** Playwright (headless), ScraperAPI (proxy), BeautifulSoup4
 - **Data Processing:** Pandas, OpenPyXL
 - **Database:** SQLite (`aiosqlite`)
-- **Infrastructure:** Docker, Xvfb (Virtual Framebuffer)
+- **Infrastructure:** Docker
 
 ## ⚙️ Local Setup (Docker)
 
