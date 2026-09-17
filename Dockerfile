@@ -15,5 +15,5 @@ RUN pip install --no-cache-dir -r requirements.txt
 # Copy the rest of the project files
 COPY . .
 
-# Run the Telegram bot inside the Xvfb virtual display
-CMD ["sh", "-c", "Xvfb :99 -screen 0 1920x1080x24 -ac & export DISPLAY=:99 && python -u bot.py"]
+# Run the Telegram bot
+CMD ["python", "-u", "bot.py"]
